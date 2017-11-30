@@ -21,7 +21,7 @@
 #define JSON_H
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <stdio.h>
 
 enum json_type {
     JSON_OBJECT,
@@ -56,6 +56,7 @@ struct json_array {
 
 json_value *json_new(enum json_type, ...);
 enum json_type json_type(json_value *);
+void json_print(json_value *, FILE *);
 
 void json_object_set(json_value *, char *, json_value *);
 json_value *json_object_get(json_value *, char *);

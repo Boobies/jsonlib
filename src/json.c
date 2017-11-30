@@ -67,6 +67,40 @@ enum json_type json_type(json_value *src) {
     return src->type;
 }
 
+void json_print(json_value *src, FILE *f) {
+    switch (json_type(src)) {
+    case JSON_OBJECT:
+        fputs("{ ", f);
+        for (struct json_object *p = src->value.object; p != NULL; (p = p->next) && fputs(", ", f)) {
+            fprintf(f, "\"%s\": ", p->name);
+            json_print(p->value, f);
+        }
+        fputs(" }", f);
+        break;
+    case JSON_ARRAY:
+        fputc('[', f);
+        for (size_t i = 0; i < json_array_length(src); ++i) {
+            json_print(json_array_get(src, i), f);
+            if (i < json_array_length(src) - 1)
+                fputs(", ", f);
+        }
+        fputc(']', f);
+        break;
+    case JSON_NUMBER:
+        fprintf(f, "%f", json_number_get(src));
+        break;
+    case JSON_STRING:
+        fprintf(f, "\"%s\"", json_string_get(src));
+        break;
+    case JSON_BOOL:
+        fputs(json_bool_get(src) ? "true" : "false", f);
+        break;
+    case JSON_NULL:
+        fputs("null", f);
+        break;
+    }
+}
+
 void json_object_set(json_value *src, char *name, json_value *val) {
     struct json_object *node;
 
