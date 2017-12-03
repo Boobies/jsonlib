@@ -55,6 +55,7 @@ struct json_array {
 };
 
 json_value *json_new(enum json_type, ...);
+json_value *json_parse(FILE *f);
 enum json_type json_type(json_value *);
 void json_print(json_value *, FILE *);
 

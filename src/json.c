@@ -18,10 +18,14 @@
  */
 
 #include <assert.h>
+#include <ctype.h>
 #include <json.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define ARRAY_MAX 64
+#define STRING_MAX 4096
 
 json_value *json_new(enum json_type type, ...) {
     json_value *val;
@@ -61,6 +65,144 @@ json_value *json_new(enum json_type type, ...) {
     va_end(arg);
 
     return val;
+}
+
+static struct json_object *json_parse_object(FILE *);
+static struct json_array *json_parse_array(FILE *);
+static double json_parse_number(FILE *);
+static char *json_parse_string(FILE *);
+static bool json_parse_bool(FILE *);
+static void json_parse_null(FILE *);
+
+json_value *json_parse(FILE *f) {
+    json_value *val = NULL;
+    int c;
+
+    while ((c = fgetc(f)) != EOF && isspace(c))
+        ;
+
+    switch (ungetc(c, f)) {
+    case '{':
+        val = json_new(JSON_OBJECT);
+        val->value.object = json_parse_object(f);
+        break;
+    case '[':
+        val = json_new(JSON_ARRAY, 0);
+        free(val->value.array);
+        val->value.array = json_parse_array(f);
+        break;
+    case '"':
+        val = json_new(JSON_STRING);
+        val->value.string = json_parse_string(f);
+        break;
+    case 't':
+    case 'f':
+        val = json_new(JSON_BOOL);
+        val->value.boolean = json_parse_bool(f);
+        break;
+    case 'n':
+        val = json_new(JSON_NULL);
+        json_parse_null(f);
+        break;
+    default:
+        val = json_new(JSON_NUMBER);
+        val->value.number = json_parse_number(f);
+        break;
+    }
+
+    return val;
+}
+
+static struct json_object *json_parse_object(FILE *f) {
+    struct json_object *obj = NULL, *node;
+    int c;
+
+    assert(fgetc(f) == '{');
+
+    do {
+        assert((node = malloc(sizeof *node)) != NULL);
+
+        node->name = json_parse_string(f);
+
+        while ((c = fgetc(f)) != EOF && isspace(c))
+            ;
+
+        assert(c == ':');
+
+        node->value = json_parse(f);
+        node->next = obj;
+        obj = node;
+
+        while ((c = fgetc(f)) != EOF && isspace(c))
+            ;
+    } while (c == ',');
+
+    assert(c == '}');
+
+    return obj;
+}
+
+static struct json_array *json_parse_array(FILE *f) {
+    struct json_array *array;
+    size_t i = 0;
+    int c;
+
+    assert(fgetc(f) == '[' && (array = malloc(sizeof *array + ARRAY_MAX * sizeof (struct json_value *))) != NULL);
+
+    do {
+        array->value[i++] = json_parse(f);
+        while ((c = fgetc(f)) != EOF && isspace(c))
+            ;
+    } while (c == ',');
+    array->length = i;
+
+    assert(c == ']');
+
+    return array;
+}
+
+static double json_parse_number(FILE *f) {
+    double n;
+    int c;
+
+    while ((c = fgetc(f)) != EOF && isspace(c))
+        ;
+    ungetc(c, f);
+
+    fscanf(f, "%lf", &n);
+
+    return n;
+}
+
+static char *json_parse_string(FILE *f) {
+    char *str, c;
+    size_t i;
+
+    while ((c = fgetc(f)) != EOF && isspace(c))
+        ;
+
+    assert(c == '"' && (str = malloc(STRING_MAX)) != NULL);
+
+    for (i = 0; (str[i] = fgetc(f)) != '"'; ++i)
+        ;
+    str[i] = '\0';
+
+    return str;
+}
+
+static bool json_parse_bool(FILE *f) {
+    switch (fgetc(f)) {
+    case 't':
+        assert(fgetc(f) == 'r' && fgetc(f) == 'u' && fgetc(f) == 'e');
+        return true;
+    case 'f':
+        assert(fgetc(f) == 'a' && fgetc(f) == 'l' && fgetc(f) == 's' && fgetc(f) == 'e');
+        return false;
+    }
+}
+
+static void json_parse_null(FILE *f) {
+    assert(fgetc(f) == 'n' && fgetc(f) == 'u' && fgetc(f) == 'l' && fgetc(f) == 'l');
 }
 
 enum json_type json_type(json_value *src) {
